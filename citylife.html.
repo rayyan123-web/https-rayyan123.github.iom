@@ -1,0 +1,443 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>City Life Open World</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;
+ overflow:hidden;
+ background:#101820;
+ color:white;
+ font-family:Arial;
+}
+#game{width:100vw;height:100vh;display:block}
+#top{
+ position:absolute;top:10px;left:10px;right:10px;
+ display:flex;justify-content:space-between;
+ pointer-events:none;gap:5px;
+}
+.stat{
+ background:#101820dd;padding:10px;
+ border-radius:10px;font-size:13px;
+}
+#controls{
+ position:absolute;bottom:20px;left:0;right:0;
+ display:flex;justify-content:space-between;
+ padding:0 15px;pointer-events:none;
+}
+.group{display:flex;gap:8px}
+button{
+ border:0;border-radius:12px;
+ background:#172b40;color:white;
+ font-size:17px;font-weight:bold;
+ padding:17px;min-width:58px;
+ box-shadow:0 3px 8px #0008;
+ touch-action:none;
+}
+button:active{background:#1688e8}
+#menu{
+ position:absolute;top:75px;right:10px;
+ display:flex;flex-direction:column;gap:6px;
+}
+#menu button{font-size:12px;padding:10px}
+#message{
+ position:absolute;top:65px;left:50%;
+ transform:translateX(-50%);
+ background:#111d;color:#ffe66b;
+ padding:10px;border-radius:10px;
+ font-size:13px;white-space:nowrap;
+}
+#streakBox{
+ position:absolute;top:50%;left:50%;
+ transform:translate(-50%,-50%);
+ background:#182a40;
+ padding:25px;border-radius:18px;
+ width:85%;max-width:320px;
+ text-align:center;display:none;
+ box-shadow:0 0 30px #000;
+}
+#streakBox button{background:#1389df}
+#close{background:#555!important}
+</style>
+</head>
+
+<body>
+
+<div id="top">
+ <div class="stat">💰 $<span id="money">500</span></div>
+ <div class="stat">💎 <span id="diamonds">0</span></div>
+ <div class="stat">🔥 <span id="streak">0</span>/10</div>
+</div>
+
+<div id="message">Welcome to your city!</div>
+
+<div id="menu">
+ <button onclick="job()">💼 JOB +$100</button>
+ <button onclick="daily()">🎁 DAILY REWARD</button>
+ <button onclick="buyBike()">🏍️ BUY BIKE</button>
+ <button onclick="openStreak()">🔥 STREAK</button>
+</div>
+
+<div id="controls">
+ <div class="group">
+  <button id="left">◀</button>
+  <button id="right">▶</button>
+ </div>
+ <div class="group">
+  <button id="brake">▼</button>
+  <button id="gas">▲</button>
+ </div>
+</div>
+
+<div id="streakBox">
+ <h2>🔥 DAILY STREAK</h2>
+ <h1>💎 100</h1>
+ <p>Play for 10 consecutive days to earn 100 diamonds!</p>
+ <p id="streakText"></p>
+ <button onclick="daily()">CLAIM TODAY</button>
+ <br><br>
+ <button id="close" onclick="closeStreak()">CLOSE</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+if(!window.THREE){
+ alert("Internet connection required to load 3D graphics.");
+ throw new Error("Three.js not loaded");
+}
+
+// SAVE DATA
+let data={};
+try{
+ data=JSON.parse(localStorage.getItem("citylife3d"))||{};
+}catch(e){data={};}
+
+let money=Number(data.money??500);
+let diamonds=Number(data.diamonds??0);
+let streak=Number(data.streak??0);
+let lastDay=data.lastDay||"";
+let bikeOwned=!!data.bikeOwned;
+
+function save(){
+ localStorage.setItem("citylife3d",JSON.stringify({
+ money,diamonds,streak,lastDay,bikeOwned
+ }));
+ updateUI();
+}
+function updateUI(){
+ document.getElementById("money").textContent=money;
+ document.getElementById("diamonds").textContent=diamonds;
+ document.getElementById("streak").textContent=streak;
+}
+function say(t){
+ document.getElementById("message").textContent=t;
+}
+
+// DAILY STREAK
+function dateKey(d){
+ return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
+}
+function daily(){
+ let today=dateKey(new Date());
+ let yesterday=new Date();
+ yesterday.setDate(yesterday.getDate()-1);
+
+ if(lastDay===today){
+  say("You already claimed today's reward!");
+  return;
+ }
+
+ streak=lastDay===dateKey(yesterday)?streak+1:1;
+ lastDay=today;
+
+ if(streak>=10){
+  diamonds+=100;
+  streak=0;
+  say("🎉 100 DIAMONDS! 10-day streak completed!");
+ }else{
+  say("🔥 Streak day "+streak+"/10!");
+ }
+ save();
+ document.getElementById("streakText").textContent=
+ "Current streak: "+streak+"/10";
+}
+function openStreak(){
+ document.getElementById("streakBox").style.display="block";
+ document.getElementById("streakText").textContent=
+ "Current streak: "+streak+"/10";
+}
+function closeStreak(){
+ document.getElementById("streakBox").style.display="none";
+}
+
+// JOBS AND SHOP
+function job(){
+ money+=100;
+ say("Job completed! +$100");
+ save();
+}
+function buyBike(){
+ if(bikeOwned){
+  say("You already own this bike!");
+  return;
+ }
+ if(money<1000){
+  say("You need $1000 to buy this bike!");
+  return;
+ }
+ money-=1000;
+ bikeOwned=true;
+ say("🏍️ New bike purchased!");
+ save();
+}
+
+// THREE JS WORLD
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x83c9e9);
+scene.fog=new THREE.Fog(0x83c9e9,60,240);
+
+const camera=new THREE.PerspectiveCamera(
+ 65,innerWidth/innerHeight,0.1,500
+);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+renderer.domElement.id="game";
+
+// LIGHTS
+scene.add(new THREE.HemisphereLight(0xffffff,0x596b48,2));
+
+const sun=new THREE.DirectionalLight(0xffffff,2);
+sun.position.set(40,80,30);
+sun.castShadow=true;
+scene.add(sun);
+
+// GROUND
+const ground=new THREE.Mesh(
+ new THREE.PlaneGeometry(500,500),
+ new THREE.MeshStandardMaterial({color:0x579b52})
+);
+ground.rotation.x=-Math.PI/2;
+ground.position.y=-0.1;
+scene.add(ground);
+
+// ROADS
+function road(x,z,w,d){
+ const r=new THREE.Mesh(
+  new THREE.BoxGeometry(w,0.15,d),
+  new THREE.MeshStandardMaterial({color:0x393d43})
+ );
+ r.position.set(x,0,z);
+ scene.add(r);
+}
+for(let i=-4;i<=4;i++){
+ road(i*45,0,12,400);
+ road(0,i*45,400,12);
+}
+
+// ROAD MARKINGS
+const markingMat=new THREE.MeshBasicMaterial({color:0xffffff});
+for(let i=-4;i<=4;i++){
+ for(let j=-18;j<=18;j++){
+  let m=new THREE.Mesh(
+   new THREE.BoxGeometry(0.3,0.03,4),markingMat
+  );
+  m.position.set(i*45,0.09,j*10);
+  scene.add(m);
+
+  let n=new THREE.Mesh(
+   new THREE.BoxGeometry(4,0.03,0.3),markingMat
+  );
+  n.position.set(j*10,0.09,i*45);
+  scene.add(n);
+ }
+}
+
+// BUILDINGS
+function building(x,z){
+ let height=8+Math.random()*22;
+ let width=10+Math.random()*8;
+
+ let colors=[0xb9a28c,0xd2c1a3,0x879db1,0xb8b8b8,0xc79a85];
+
+ let b=new THREE.Mesh(
+  new THREE.BoxGeometry(width,height,width),
+  new THREE.MeshStandardMaterial({
+   color:colors[Math.floor(Math.random()*colors.length)]
+  })
+ );
+ b.position.set(x,height/2,z);
+ b.castShadow=true;
+ b.receiveShadow=true;
+ scene.add(b);
+
+ // WINDOWS
+ for(let y=3;y<height-1;y+=4){
+  for(let side of [-1,1]){
+   let win=new THREE.Mesh(
+    new THREE.BoxGeometry(1.6,1.8,0.12),
+    new THREE.MeshStandardMaterial({
+     color:0x80c9df,roughness:0.3
+    })
+   );
+   win.position.set(x+side*width/2,y,z);
+   scene.add(win);
+  }
+ }
+}
+
+for(let x=-180;x<=180;x+=45){
+ for(let z=-180;z<=180;z+=45){
+  if(Math.abs(x)%45===0 && Math.abs(z)%45===0){
+   if(Math.random()>0.25){
+    building(x+(x>=0?13:-13),z+(z>=0?13:-13));
+   }
+  }
+ }
+}
+
+// MOTORCYCLE
+const bike=new THREE.Group();
+scene.add(bike);
+
+const black=new THREE.MeshStandardMaterial({color:0x161616});
+const red=new THREE.MeshStandardMaterial({color:0xe51e32});
+const metal=new THREE.MeshStandardMaterial({color:0xaaaaaa});
+
+function part(geometry,material,x,y,z){
+ let p=new THREE.Mesh(geometry,material);
+ p.position.set(x,y,z);
+ p.castShadow=true;
+ bike.add(p);
+ return p;
+}
+
+// Wheels
+function wheel(z){
+ let w=new THREE.Mesh(
+  new THREE.CylinderGeometry(0.43,0.43,0.18,20),
+  black
+ );
+ w.rotation.z=Math.PI/2;
+ w.position.set(0,0.55,z);
+ bike.add(w);
+}
+wheel(-1.05);
+wheel(1.05);
+
+// Bike frame
+part(new THREE.BoxGeometry(0.35,0.3,1.7),red,0,1.05,0);
+part(new THREE.BoxGeometry(0.65,0.16,0.65),black,0,1.35,-0.15);
+part(new THREE.BoxGeometry(0.65,0.15,0.5),black,0,1.65,0.85);
+part(new THREE.BoxGeometry(0.3,0.5,0.3),red,0,1.5,-0.65);
+
+// Handlebar
+part(new THREE.BoxGeometry(1,0.09,0.12),metal,0,1.65,-0.9);
+
+// Rider
+const riderMat=new THREE.MeshStandardMaterial({color:0x1e293b});
+part(new THREE.BoxGeometry(0.55,0.7,0.4),riderMat,0,2,0.1);
+
+const helmet=new THREE.Mesh(
+ new THREE.SphereGeometry(0.32,16,16),
+ new THREE.MeshStandardMaterial({color:0xffd52d})
+);
+helmet.position.set(0,2.6,-0.15);
+bike.add(helmet);
+
+// Starting position
+bike.position.set(0,0,0);
+
+// CONTROLS
+let keys={gas:false,brake:false,left:false,right:false};
+let speed=0;
+let rotation=0;
+
+function bind(id,key){
+ let b=document.getElementById(id);
+ b.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  keys[key]=true;
+ });
+ for(let ev of ["pointerup","pointercancel","pointerleave"]){
+  b.addEventListener(ev,()=>keys[key]=false);
+ }
+}
+bind("gas","gas");
+bind("brake","brake");
+bind("left","left");
+bind("right","right");
+
+window.addEventListener("keydown",e=>{
+ if(e.key==="ArrowUp"||e.key==="w")keys.gas=true;
+ if(e.key==="ArrowDown"||e.key==="s")keys.brake=true;
+ if(e.key==="ArrowLeft"||e.key==="a")keys.left=true;
+ if(e.key==="ArrowRight"||e.key==="d")keys.right=true;
+});
+window.addEventListener("keyup",e=>{
+ if(e.key==="ArrowUp"||e.key==="w")keys.gas=false;
+ if(e.key==="ArrowDown"||e.key==="s")keys.brake=false;
+ if(e.key==="ArrowLeft"||e.key==="a")keys.left=false;
+ if(e.key==="ArrowRight"||e.key==="d")keys.right=false;
+});
+
+// GAME LOOP
+const clock=new THREE.Clock();
+
+function animate(){
+ requestAnimationFrame(animate);
+ let dt=Math.min(clock.getDelta(),0.04);
+
+ if(keys.gas)speed=Math.min(speed+10*dt,22);
+ else speed*=Math.pow(0.985,dt*60);
+
+ if(keys.brake)speed=Math.max(speed-20*dt,-5);
+
+ if(Math.abs(speed)>0.5){
+  let turn=(keys.left?1:0)-(keys.right?1:0);
+  rotation+=turn*dt*1.6*Math.min(Math.abs(speed)/8,1);
+ }
+
+ bike.rotation.y=rotation;
+ bike.position.x-=Math.sin(rotation)*speed*dt;
+ bike.position.z-=Math.cos(rotation)*speed*dt;
+
+ // Follow camera
+ let behind=new THREE.Vector3(
+  bike.position.x+Math.sin(rotation)*7,
+  bike.position.y+4.5,
+  bike.position.z+Math.cos(rotation)*7
+ );
+ camera.position.lerp(behind,0.12);
+
+ let target=new THREE.Vector3(
+  bike.position.x,
+  1.5,
+  bike.position.z
+ );
+ camera.lookAt(target);
+
+ renderer.render(scene,camera);
+}
+animate();
+
+window.addEventListener("resize",()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+
+updateUI();
+</script>
+</body>
+</html>
