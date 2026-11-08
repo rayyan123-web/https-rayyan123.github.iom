@@ -1,0 +1,248 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ultimate Football Star | R.A STUDIOS</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#071525;color:white;font-family:Arial;text-align:center}
+header{padding:18px;background:#103c42}
+h1{color:#62edbd;margin:5px}
+.card{max-width:480px;margin:20px auto;padding:20px;background:#122b40;border-radius:18px}
+input,select{width:100%;padding:13px;margin:8px 0;background:#071a2a;color:white;border:1px solid #487087;border-radius:9px}
+button{padding:12px;border:0;border-radius:10px;background:#45dfaa;color:#05271d;font-weight:bold;cursor:pointer}
+#clubs{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.club{background:#1b4056;color:white}
+.club.selected{background:#087a59;outline:2px solid #55e5b1}
+#game{display:none;padding:10px}
+canvas{width:100%;max-width:850px;background:#16834c;border:3px solid white;border-radius:10px}
+.controls{max-width:390px;margin:12px auto;display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.controls button{padding:15px}
+#status{color:#55e5b1;font-weight:bold}
+</style>
+</head>
+<body>
+<header>
+<h1>ULTIMATE FOOTBALL STAR</h1>
+<p>Your career. Your club. Your legacy.</p>
+</header>
+
+<section id="setup" class="card">
+<h2>Create Your Player</h2>
+<input id="name" value="Rising Star" placeholder="Player name">
+<select id="position">
+<option>Striker</option><option>Winger</option>
+<option>Midfielder</option><option>Defender</option>
+</select>
+<h3>Choose Your Club</h3>
+<div id="clubs"></div>
+<button id="start" style="width:100%;margin-top:18px">
+CREATE CAREER ⚽
+</button>
+<p>Made by R.A STUDIOS</p>
+</section>
+
+<section id="game">
+<h3 id="playerInfo"></h3>
+<p>Goals: <span id="goals">0</span> |
+Time: <span id="time">60</span>s</p>
+<canvas id="pitch" width="800" height="500"></canvas>
+<p id="status">Move and score!</p>
+<div class="controls">
+<button data-move="up">⬆️</button>
+<button id="shoot">SHOOT ⚽</button>
+<button data-move="left">⬅️</button>
+<button data-move="down">⬇️</button>
+<button id="pass">PASS</button>
+<button data-move="right">➡️</button>
+</div>
+<button id="again" hidden>PLAY AGAIN</button>
+</section>
+
+<script>
+const names=[
+"Falcon City FC","Royal Tigers","Storm United",
+"Blue Comets","Red Valley FC","Golden Eagles",
+"Metro Stars","Ocean Rangers","Thunder Athletic",
+"Crownside FC","Desert Wolves","Silverbridge FC"
+];
+
+let selected=0;
+const clubs=document.getElementById("clubs");
+
+names.forEach((name,i)=>{
+ let b=document.createElement("button");
+ b.textContent=name;
+ b.className="club"+(i===0?" selected":"");
+ b.onclick=()=>{
+  selected=i;
+  document.querySelectorAll(".club").forEach(x=>x.classList.remove("selected"));
+  b.classList.add("selected");
+ };
+ clubs.appendChild(b);
+});
+
+const $=id=>document.getElementById(id);
+const canvas=$("pitch");
+const ctx=canvas.getContext("2d");
+
+let player,ball,goals,time,timer,playing=false;
+let move={up:false,down:false,left:false,right:false};
+
+function startCareer(){
+ $("playerInfo").textContent=
+ ($("name").value||"Rising Star")+" | "+
+ $("position").value+" | "+names[selected];
+
+ $("setup").style.display="none";
+ $("game").style.display="block";
+ $("again").hidden=true;
+
+ player={x:400,y:400};
+ ball={x:400,y:250,vx:0,vy:0};
+ goals=0;time=60;playing=true;
+
+ $("goals").textContent=goals;
+ $("time").textContent=time;
+ $("status").textContent="Match started! Score a goal!";
+
+ clearInterval(timer);
+ timer=setInterval(()=>{
+  if(!playing)return;
+  time--;
+  $("time").textContent=time;
+  if(time<=0)endMatch();
+ },1000);
+
+ update();
+}
+
+function endMatch(){
+ playing=false;
+ clearInterval(timer);
+ $("status").textContent="FULL TIME! Goals: "+goals;
+ $("again").hidden=false;
+}
+
+$("start").onclick=startCareer;
+$("again").onclick=startCareer;
+
+function draw(){
+ ctx.clearRect(0,0,800,500);
+ for(let i=0;i<8;i++){
+  ctx.fillStyle=i%2?"#16834c":"#1c9255";
+  ctx.fillRect(i*100,0,100,500);
+ }
+ ctx.strokeStyle="white";
+ ctx.lineWidth=3;
+ ctx.strokeRect(20,20,760,460);
+ ctx.beginPath();
+ ctx.moveTo(20,250);ctx.lineTo(780,250);
+ ctx.stroke();
+ ctx.beginPath();ctx.arc(400,250,65,0,Math.PI*2);ctx.stroke();
+ ctx.strokeRect(275,20,250,90);
+ ctx.strokeRect(275,390,250,90);
+
+ [[250,160],[550,160],[400,190]].forEach(([x,y])=>{
+  ctx.fillStyle="#ed5353";
+  ctx.beginPath();ctx.arc(x,y,16,0,Math.PI*2);ctx.fill();
+ });
+
+ ctx.fillStyle="#ffce4b";
+ ctx.beginPath();ctx.arc(400,55,18,0,Math.PI*2);ctx.fill();
+
+ ctx.fillStyle="#42dfff";
+ ctx.beginPath();ctx.arc(player.x,player.y,18,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle="#061c2a";
+ ctx.font="bold 12px Arial";
+ ctx.fillText("10",player.x-7,player.y+4);
+
+ ctx.fillStyle="white";
+ ctx.beginPath();ctx.arc(ball.x,ball.y,11,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle="#222";ctx.stroke();
+}
+
+function update(){
+ if(!playing)return;
+
+ let dx=0,dy=0;
+ if(move.up)dy--;
+ if(move.down)dy++;
+ if(move.left)dx--;
+ if(move.right)dx++;
+
+ let length=Math.hypot(dx,dy)||1;
+ player.x+=dx/length*4;
+ player.y+=dy/length*4;
+
+ player.x=Math.max(40,Math.min(760,player.x));
+ player.y=Math.max(40,Math.min(460,player.y));
+
+ ball.x+=ball.vx;ball.y+=ball.vy;
+ ball.vx*=.97;ball.vy*=.97;
+
+ if(Math.hypot(player.x-ball.x,player.y-ball.y)<35){
+  if(Math.hypot(ball.vx,ball.vy)<2){
+   ball.x=player.x;
+   ball.y=player.y-25;
+  }
+ }
+
+ if(ball.y<25&&ball.x>350&&ball.x<450){
+  goals++;
+  $("goals").textContent=goals;
+  $("status").textContent="GOOOAL! ⚽";
+  ball={x:400,y:250,vx:0,vy:0};
+  player={x:400,y:400};
+ }
+
+ if(ball.x<30||ball.x>770)ball.vx*=-.7;
+ if(ball.y<30||ball.y>470)ball.vy*=-.7;
+
+ draw();
+ requestAnimationFrame(update);
+}
+
+function kick(power){
+ if(!playing)return;
+ if(Math.hypot(player.x-ball.x,player.y-ball.y)>75){
+  $("status").textContent="Move closer to the ball!";
+  return;
+ }
+ let dx=400-ball.x,dy=-500-ball.y;
+ let length=Math.hypot(dx,dy)||1;
+ ball.vx=dx/length*power;
+ ball.vy=dy/length*power;
+ $("status").textContent="Shot taken!";
+}
+
+$("shoot").onclick=()=>kick(13);
+$("pass").onclick=()=>kick(7);
+
+document.querySelectorAll("[data-move]").forEach(btn=>{
+ let direction=btn.dataset.move;
+ btn.addEventListener("pointerdown",e=>{
+  e.preventDefault();move[direction]=true;
+ });
+ ["pointerup","pointerleave","pointercancel"].forEach(event=>{
+  btn.addEventListener(event,()=>move[direction]=false);
+ });
+});
+
+document.addEventListener("keydown",e=>{
+ if(e.key==="ArrowUp"||e.key==="w")move.up=true;
+ if(e.key==="ArrowDown"||e.key==="s")move.down=true;
+ if(e.key==="ArrowLeft"||e.key==="a")move.left=true;
+ if(e.key==="ArrowRight"||e.key==="d")move.right=true;
+});
+document.addEventListener("keyup",e=>{
+ if(e.key==="ArrowUp"||e.key==="w")move.up=false;
+ if(e.key==="ArrowDown"||e.key==="s")move.down=false;
+ if(e.key==="ArrowLeft"||e.key==="a")move.left=false;
+ if(e.key==="ArrowRight"||e.key==="d")move.right=false;
+});
+</script>
+</body>
+</html>
